@@ -1,0 +1,21 @@
+{
+  "name": "Bingo Hall",
+  "genre": "party",
+  "dim": "2D",
+  "mode": "Drop-in",
+  "players": "2–30",
+  "hook": "Eyes down! Daub fast, shout BINGO first.",
+  "how": "The caller draws a ball every few seconds: tap it on your card to daub it. Finish a line, then the four corners, then a full house, and hit BINGO before anyone else.",
+  "controls": "Click or tap numbers to daub, click or tap BINGO (or press B)",
+  "uses": [
+    ["Leaderboard", "Prizes won, all time, shown on the results card."],
+    ["Bots", "Bots take the empty seats, daub at a human pace and sometimes win."],
+    ["Host-run rounds", "The host's browser calls the balls and checks every BINGO; if it leaves, the next player takes over."],
+    ["Live sync", "Everyone sees the same balls, cards and who is close to a bingo."]
+  ],
+  "ideas": [
+    "Make it a spooky Halloween bingo with pumpkin daubers",
+    "Add an X-shaped prize after the four corners",
+    "Give each player two cards to play at once"
+  ]
+}

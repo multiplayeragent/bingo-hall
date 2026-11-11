@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bingo Hall</title>
+<style>
+  :root { --bg: #2a1430; --panel: #3d1f46; --line: #ffffff22; --ink: #fff; --dim: #e5cfe0; --gold: #ffc94a; --cream: #fff4df; --cardink: #4a2338;
+          --B: #3e8ef7; --I: #ef4f6b; --N: #a77bff; --G: #2fbf71; --O: #ff9a2e; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body { background: radial-gradient(900px 500px at 50% -10%, #6b2f5f, transparent 70%), radial-gradient(700px 500px at 0% 110%, #4a1f3c, transparent 60%), var(--bg);
+         color: var(--ink); font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  #app { height: 100%; display: flex; flex-direction: column; max-width: 1000px; margin: 0 auto; box-sizing: border-box;
+         padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  header { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: .03em; color: var(--gold); white-space: nowrap; }
+  #name { width: 120px; height: 36px; margin-left: auto; border-radius: 10px; border: 1px solid #ffffff33; background: #ffffff14; color: #fff; padding: 0 10px; font: inherit; font-size: 16px; box-sizing: border-box; }
+  #voice { width: 44px; height: 44px; border-radius: 12px; border: 1px solid #ffffff33; background: #ffffff14; color: #fff; font-size: 20px; cursor: pointer; flex: none; }
+  #voice.on { background: var(--gold); color: #3a1a2a; }
+  main { flex: 1; min-height: 0; display: grid; gap: 8px; margin-top: 6px;
+         grid-template-columns: 1fr; grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+         grid-template-areas: "mach" "stage" "card" "btn" "players" "called"; }
+  #right { display: contents; }
+  @media (min-width: 760px) and (min-height: 480px) {
+    main { grid-template-columns: minmax(0, 1fr) minmax(300px, 440px); grid-template-rows: auto auto minmax(0, 1fr); column-gap: 22px; row-gap: 12px;
+           grid-template-areas: "mach right" "called right" "players right"; }
+    #right { grid-area: right; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+    #right #cardWrap { flex: 1; }
+  }
+  #mach { grid-area: mach; width: 100%; height: 140px; display: block; }
+  @media (min-width: 760px) and (min-height: 480px) { #mach { height: 190px; } }
+  #stage { grid-area: stage; display: flex; align-items: center; gap: 10px; font-weight: 700; }
+  #stage b { color: var(--gold); font-size: 18px; }
+  #stage span { color: var(--dim); font-weight: 600; font-size: 13px; }
+  #pat { display: grid; grid-template-columns: repeat(5, 7px); gap: 2px; flex: none; }
+  #pat i { width: 7px; height: 7px; border-radius: 2px; background: #ffffff26; }
+  #pat i.on { background: var(--gold); }
+  #cardWrap { grid-area: card; min-height: 0; display: grid; place-items: center; position: relative; }
+  #card { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; padding: 8px; border-radius: 16px; background: var(--cream); box-shadow: 0 10px 0 #0004, 0 0 0 4px #ffffff18; box-sizing: border-box; position: relative; }
+  #card .hd { text-align: center; font-weight: 900; color: #fff; border-radius: 8px; font-size: 18px; line-height: 26px; }
+  #card .cell { position: relative; border: 0; border-radius: 10px; background: #fff; color: var(--cardink); font: 800 22px system-ui, sans-serif; cursor: pointer; padding: 0;
+                box-shadow: inset 0 -3px 0 #0000001a; display: grid; place-items: center; touch-action: manipulation; }
+  #card .cell.free { background: #ffe9b0; font-size: 12px; letter-spacing: .05em; }
+  #card .cell .dab { position: absolute; inset: 9%; border-radius: 50%; opacity: 0; transform: scale(1.6); transition: transform .18s cubic-bezier(.2,1.6,.4,1), opacity .12s; pointer-events: none; mix-blend-mode: multiply; }
+  #card .cell.on .dab { opacity: .78; transform: scale(1) rotate(var(--r, 0deg)); }
+  #card .cell.nope { animation: nope .3s; }
+  #card .cell.want { box-shadow: inset 0 0 0 3px var(--gold), inset 0 -3px 0 #0000001a; }
+  @keyframes nope { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  #card.wait .cell { color: #4a233855; }
+  #wait { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(300px, 80%); box-sizing: border-box; text-align: center; font-weight: 800; font-size: 17px; color: #fff; background: #2a1430e6; border: 2px solid var(--gold); border-radius: 14px; padding: 14px 16px; pointer-events: none; }
+  #wait[hidden] { display: none; }
+  #btn { grid-area: btn; height: 58px; border: 0; border-radius: 16px; background: #6a3a62; color: #ffffffaa; font: 900 26px system-ui, sans-serif; letter-spacing: .08em; cursor: pointer; box-shadow: 0 6px 0 #0005; transition: transform .08s, background .2s; width: 100%; }
+  #btn.ready { background: linear-gradient(180deg, #ffd65a, #ff9a2e); color: #4a1a10; animation: glow 0.8s infinite alternate; }
+  #btn:active { transform: translateY(3px); box-shadow: 0 3px 0 #0005; }
+  @keyframes glow { to { box-shadow: 0 6px 0 #0005, 0 0 28px #ffc94acc; } }
+  #players { grid-area: players; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; overflow: auto; max-height: 62px; }
+  @media (min-width: 760px) and (min-height: 480px) { #players { max-height: none; } }
+  .p { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 999px; background: #ffffff14; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .p .av { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #2a1430; font-size: 12px; }
+  .p.me { box-shadow: inset 0 0 0 2px var(--gold); }
+  .p em { font-style: normal; color: var(--dim); font-weight: 700; font-size: 12px; }
+  .p em.hot { color: var(--gold); }
+  .p.late { opacity: .55; }
+  #called { grid-area: called; display: grid; grid-template-columns: 20px repeat(15, 1fr); gap: 2px; font-size: 10px; font-weight: 700; align-self: start; }
+  #called i { font-style: normal; text-align: center; line-height: 16px; border-radius: 4px; background: #ffffff0d; color: #ffffff44; }
+  #called i.l { color: #fff; font-weight: 900; background: none; }
+  #called i.on { color: #fff; }
+  #called i.last { outline: 2px solid #fff; }
+  @media (min-width: 760px) and (min-height: 480px) { #called { font-size: 12px; } #called i { line-height: 22px; } #called { grid-template-columns: 24px repeat(15, 1fr); } }
+  #hint { text-align: center; font-size: 13px; color: var(--dim); min-height: 18px; }
+  #net { text-align: center; font-size: 12px; color: var(--dim); opacity: .8; min-height: 16px; }
+  #fx { position: fixed; inset: 0; pointer-events: none; }
+  #banner { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; text-align: center; }
+  #banner[hidden], #over[hidden] { display: none; }
+  #banner div { font: 900 min(18vw, 120px) system-ui, sans-serif; color: var(--gold); -webkit-text-stroke: 3px #6a1f2a; text-shadow: 0 8px 0 #0006; line-height: 1; }
+  #banner small { display: block; font-size: min(6vw, 30px); color: #fff; -webkit-text-stroke: 0; margin-top: 10px; text-shadow: 0 2px 6px #000c; }
+  #over { position: fixed; inset: 0; display: grid; place-items: center; background: #1a0a1ccc; }
+  .card2 { width: min(380px, calc(100vw - 32px)); max-height: 86vh; overflow: auto; padding: 20px; border-radius: 18px; background: var(--panel); border: 2px solid #ffffff2a; box-sizing: border-box; }
+  .card2 h2 { margin: 0 0 10px; font-size: 22px; color: var(--gold); }
+  .card2 h3 { margin: 14px 0 4px; font-size: 14px; color: #ffb3c8; }
+  .card2 ol, .card2 ul { margin: 0; padding-left: 24px; font-size: 14px; }
+  .card2 ul { list-style: none; padding: 0; }
+  .card2 li span { float: right; font-variant-numeric: tabular-nums; }
+  .card2 li.me { color: var(--gold); font-weight: 700; }
+  .card2 p { margin: 12px 0; font-size: 13px; opacity: .85; text-align: center; }
+  button.go { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--gold); color: #3a1a2a; font: 800 17px system-ui, sans-serif; cursor: pointer; }
+</style>
+<script src="https://cdn.multiplayeragent.com/sdk/mp.global.js"></script>
+</head>
+<body>
+<div id="app">
+  <header><h1>Bingo Hall</h1><input id="name" maxlength="16" placeholder="Your name" aria-label="Your name"><button id="voice" title="Caller voice" aria-label="Caller voice">🔈</button></header>
+  <main>
+    <canvas id="mach"></canvas>
+    <section id="right">
+      <div id="stage"><div id="pat"></div><div><b id="stageName">Line</b> <span id="stageHint"></span></div></div>
+      <div id="cardWrap"><div id="card"></div><div id="wait" hidden></div></div>
+      <button id="btn">BINGO!</button>
+    </section>
+    <div id="players"></div>
+    <div id="called"></div>
+  </main>
+  <div id="hint"></div>
+  <div id="net">Connecting…</div>
+</div>
+<canvas id="fx"></canvas>
+<div id="banner" hidden><div></div></div>
+<div id="over" hidden><div class="card2">
+  <h2 id="title">Game over</h2><ul id="results"></ul>
+  <h3>Most bingos</h3><ol id="board"><li>Loading…</li></ol>
+  <p id="next"></p>
+  <button class="go" id="again">Play again</button>
+</div></div>
+<script>
+/* ═══ BINGO HALL · a Multiplayer Agent starter ═════════════════════════════════════════
+ * A cozy bingo hall. The caller draws a ball every few seconds; daub it if it's on your card.
+ * Each game has three prizes on the same card: a line, the four corners, then a full house.
+ * First to press BINGO with the pattern done wins it. Party, 2–30; bots fill the hall.
+ *
+ * WHERE THINGS ARE (search for the "── " headers):
+ *   CONFIG ........ ball timing, breaks, bots, the prizes
+ *   CONNECTION .... MP_CONNECT, joining, the offline room, who is host
+ *   CARDS & BALLS . the seeded card maker, the ball order, the patterns (add one in PRIZES)
+ *   GAME (HOST) ... calling balls, checking BINGO claims, the bots. Only the host writes `game`.
+ *   MY CARD ....... daubing and calling BINGO. Each player writes only its own daubs.
+ *   MACHINE ....... the ball machine canvas: the globe, the big ball, the rail
+ *   SCREEN ........ the card, the called board, the players, banners, results, leaderboard
+ *   SOUND & VOICE . WebAudio pops and the optional caller voice (speech synthesis)
+ *
+ * HOW THE MULTIPLAYER WORKS (a relay room: no server code):
+ *   - The whole game lives in ONE shared field, `game`: {id, v, seed, phase, stage, n, nextAt,
+ *     endsAt, in, bots, wins, bad}. Only the HOST writes it; `v` goes up on every write.
+ *   - The HOST is the lowest sessionId among live players (heartbeat seen in the last 3s),
+ *     worked out every frame. It calls the next ball when its clock passes `nextAt`, so a
+ *     new host simply carries on: same balls, same cards, same prize.
+ *   - Cards and the ball order come from game.seed (mulberry32), so every player can draw
+ *     everyone's card and the host can check any claim without anyone sending a card.
+ *   - Each player writes its OWN entity: `n` (name), `c` (daub color), `hb` (heartbeat) and
+ *     `d` = {g, m}: game id + a bitmask of the cells it has daubed (others show "2 to go").
+ *   - Intents to the host: "bingo" {g, s, m} (I claim this prize with these daubs) and
+ *     "again" (start the next game sooner). The host checks the daubed cells were really
+ *     called and make the pattern; a wrong call sits out the next few balls.
+ *   - Bots live inside `game.bots` (name, color, daub mask). The host daubs for them with a
+ *     human-like delay and has them call BINGO a second or three after they finish.
+ *   - Players who arrive mid-game get a card at the next game (or this one, if it just began).
+ *   - ?attract plays offline with bots only (the preview video is recorded from it).
+ *   - Leaderboard "bingo-wins": prizes won (submitted with "inc"), on the results card.
+ */
+
+// ── CONFIG ──────────────────────────────────────────────────────────────────────────
+const CONFIG = {
+  seats: 6,               // bots fill the hall up to this many cards
+  callMs: 2300,           // time between balls
+  fastCallMs: 1500,       // time between balls in the full-house round
+  firstBallMs: 2200,      // pause before the first ball of each prize
+  wonMs: 4200,            // the BINGO! celebration before the next prize
+  breakMs: 15000,         // the break between games (results card)
+  lateJoinBalls: 3,       // someone who arrives before this many balls still gets a card this game
+  falseWait: 2,           // a wrong BINGO call can't call again for this many balls
+  giveUpMs: 8000,         // all 75 balls out and nobody calls: the prize goes unclaimed after this
+  botDaubMin: 700, botDaubMax: 2600, // ms a bot takes to daub a called number
+  botMissChance: 0.08,    // sometimes a bot doesn't notice a number...
+  botMissMs: 9000,        // ...for about this long
+  botClaimMin: 1300, botClaimMax: 4200, // ms a bot takes to notice its own bingo
+  autoDaubMs: 700,        // ?attract: how fast the autopilot daubs your card
+  board: "bingo-wins",
+};
+const BOT_NAMES = ["Dotty", "Lucky Lou", "Nana Jo", "Big Al", "Marge", "Dabbin' Dee", "Uncle Ray", "Rosie", "Fran", "Mo", "Pearl", "Stan"];
+const COLORS = ["#ef4f6b", "#3e8ef7", "#2fbf71", "#a77bff", "#ff9a2e", "#ff5fb0", "#14b8c4", "#c9a400", "#7c5cff", "#e05a2a", "#4caf50", "#d946ef"];
+const COLS = "BINGO", COL_COLORS = ["#3e8ef7", "#ef4f6b", "#a77bff", "#2fbf71", "#ff9a2e"];
+
+// ── CONNECTION ──────────────────────────────────────────────────────────────────────
+// The builder fills these in for this game. Downloaded from GitHub? Put your own pk_ key here.
+const MP_CONNECT = {
+  key: 'pk_REPLACE_ME',
+  room: 'bingo-hall',
+  endpoint: 'wss://live.multiplayeragent.com',
+  apiUrl: 'https://api.multiplayeragent.com',
+};
+const ATTRACT = new URLSearchParams(location.search).has("attract");
+
+/** Same shape as the SDK client, kept in this tab: offline play and ?attract. */
+function localRoom() {
+  const id = "local", state = { entities: { players: { [id]: {} } }, shared: {} }, subs = [];
+  let queued = false;
+  const emit = () => { if (!queued) { queued = true; queueMicrotask(() => { queued = false; subs.forEach((f) => f(state)); }); } };
+  const put = (o, k, v) => { if (typeof k === "object") Object.assign(o, k); else o[k] = v; emit(); };
+  return {
+    sessionId: id, state, offline: true,
+    me: { set: (k, v) => put(state.entities.players[id], k, v) },
+    setShared: (k, v) => put(state.shared, k, v),
+    onState: (f) => { subs.push(f); f(state); }, onJoin() {}, onLeave() {}, on() {}, send() {},
+    onDisconnect() {}, onReconnect() {}, leave: async () => {},
+  };
+}
+async function connect() {
+  if (ATTRACT || typeof MP === "undefined") return localRoom();
+  try {
+    const mp = await Promise.race([MP.join({ ...MP_CONNECT }), new Promise((_, no) => setTimeout(() => no(new Error("timed out")), 10000))]);
+    window.mp = mp; // the builder calls window.mp.leave() when the page closes
+    return mp;
+  } catch (e) {
+    console.warn("Playing offline:", e && e.message);
+    return localRoom();
+  }
+}
+const parse = (v, fb) => { if (typeof v !== "string") return fb; try { return JSON.parse(v); } catch { return fb; } };
+const memo = new Map();
+/** A shared JSON field, parsed once per change (read-only: never mutate what this returns). */
+function shared(key, fallback) {
+  const raw = S.shared[key], m = memo.get(key);
+  if (m && m.raw === raw) return m.v;
+  const v = parse(raw, fallback); memo.set(key, { raw, v }); return v;
+}
+let net = null, S = { entities: { players: {} }, shared: {} }, dropped = false;
+const seenHb = new Map();
+function livePlayers() {
+  const now = performance.now(), out = [];
+  for (const [id, p] of Object.entries(S.entities.players || {})) {
+    const s = seenHb.get(id);
+    if (!s || s.hb !== p.hb) seenHb.set(id, { hb: p.hb, at: now });
+    if (id === net.sessionId || now - seenHb.get(id).at < 3000) out.push(id);
+  }
+  return out.sort();
+}
+/** Never while my own loop is stalled (a frozen or background tab), nor for 0.7s after it wakes:
+ *  the room moved on without me, so the newer state lands first and I carry on from it. */
+const isHost = () => livePlayers()[0] === net.sessionId && performance.now() - host.wokeAt > 700 && performance.now() - host.frameAt < 1000;
+const isBot = (id) => id[0] === "@"; // bot ids look like "@3"; sessionIds never have an @
+
+// ── CARDS & BALLS ───────────────────────────────────────────────────────────────────
+function mulberry32(a) { return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function shuffle(a, r) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const FREE = 1 << 12; // the middle square is free
+const cardMemo = new Map();
+/** A player's card for one game: 25 numbers, row by row (cell 12 is 0 = FREE). B 1–15, I 16–30, N 31–45, G 46–60, O 61–75. */
+function cardFor(seed, id) {
+  const key = seed + ":" + id;
+  if (cardMemo.has(key)) return cardMemo.get(key);
+  const r = mulberry32(hashStr(key)), cells = [];
+  for (let c = 0; c < 5; c++) {
+    const col = shuffle(Array.from({ length: 15 }, (_, i) => c * 15 + i + 1), r).slice(0, 5).sort((a, b) => a - b);
+    for (let row = 0; row < 5; row++) cells[row * 5 + c] = col[row];
+  }
+  cells[12] = 0;
+  if (cardMemo.size > 200) cardMemo.clear();
+  cardMemo.set(key, cells);
+  return cells;
+}
+const ballMemo = { seed: null, order: [] };
+/** The order the 75 balls come out in, from the game's seed: the same for everyone. */
+function ballOrder(seed) {
+  if (ballMemo.seed !== seed) { ballMemo.seed = seed; ballMemo.order = shuffle(Array.from({ length: 75 }, (_, i) => i + 1), mulberry32(seed ^ 0x9e3779b9)); }
+  return ballMemo.order;
+}
+const calledList = (g) => ballOrder(g.seed).slice(0, g.n);
+const calledSet = (g) => new Set(calledList(g));
+const colOf = (num) => Math.floor((num - 1) / 15);
+const label = (num) => COLS[colOf(num)] + " " + num;
+/** Which cells of a card have been called (the free square always counts). */
+function calledMask(card, set) { let m = 0; card.forEach((num, i) => { if (!num || set.has(num)) m |= 1 << i; }); return m; }
+
+// PRIZES: one per stage of a game, in order. Each pattern is a list of masks; any one of them completes it.
+const rowMask = (r) => [0, 1, 2, 3, 4].reduce((m, c) => m | (1 << (r * 5 + c)), 0);
+const colMask = (c) => [0, 1, 2, 3, 4].reduce((m, r) => m | (1 << (r * 5 + c)), 0);
+const PRIZES = [
+  { name: "Line", hint: "any row, column or diagonal", masks: [0, 1, 2, 3, 4].map(rowMask).concat([0, 1, 2, 3, 4].map(colMask), [[0, 6, 12, 18, 24], [4, 8, 12, 16, 20]].map((cs) => cs.reduce((m, i) => m | (1 << i), 0))) },
+  { name: "Four corners", hint: "all four corners", masks: [(1 << 0) | (1 << 4) | (1 << 20) | (1 << 24)] },
+  { name: "Full house", hint: "every number on your card", masks: [(1 << 25) - 1] },
+];
+const bits = (m) => { let n = 0; while (m) { n += m & 1; m >>>= 1; } return n; };
+const complete = (mask, stage) => PRIZES[stage].masks.some((p) => (mask & p) === p);
+const toGo = (mask, stage) => Math.min(...PRIZES[stage].masks.map((p) => bits(p & ~mask)));
+
+// ── GAME (HOST) ─────────────────────────────────────────────────────────────────────
+const host = { last: null, frameAt: 0, wokeAt: -1e9, plan: new Map(), claimAt: new Map(), planGame: -1 };
+/** The game as state has it, or the host's own newer write that hasn't come back yet. `v` only goes up. */
+function game() {
+  const g = shared("game", null);
+  return host.last && isHost() && (!g || host.last.v > g.v) ? host.last : g;
+}
+function writeGame(g) { g = { ...g, v: (game()?.v ?? 0) + 1 }; host.last = g; net.setShared("game", JSON.stringify(g)); return g; }
+const rand = (a, b) => a + Math.random() * (b - a);
+const humans = () => livePlayers();
+const callMs = (g) => (g.stage === 2 ? CONFIG.fastCallMs : CONFIG.callMs);
+
+function newBots(people) {
+  const want = Math.max(0, CONFIG.seats - people.length), names = shuffle([...BOT_NAMES], Math.random);
+  const used = new Set(people.map(colorOf)), free = COLORS.filter((c) => !used.has(c));
+  return Array.from({ length: want }, (_, i) => ({ i: "@" + (i + 1), n: names[i % names.length], c: free[i] || COLORS[(i + 3) % COLORS.length], m: FREE }));
+}
+/** A new game: a fresh seed (new cards, new balls), everyone here gets a card, bots fill the rest. */
+function newGame(id) {
+  const people = humans(), t = Date.now();
+  return writeGame({ id, phase: "play", seed: (Math.random() * 1e9) | 0, stage: 0, n: ATTRACT ? 21 : 0, nextAt: t + CONFIG.firstBallMs, calledAt: t, endsAt: 0,
+    in: people, bots: newBots(people), wins: [], bad: {} });
+}
+
+function hostTick() {
+  let g = game();
+  const t = Date.now();
+  if (!g) g = newGame(1);
+  if (host.planGame !== g.id) { host.planGame = g.id; host.plan.clear(); host.claimAt.clear(); }
+  if (g.phase === "break") { if (t >= g.endsAt) newGame(g.id + 1); return; }
+  if (g.phase === "won") {
+    if (t < g.endsAt) return;
+    if (g.stage + 1 < PRIZES.length) writeGame({ ...g, phase: "play", stage: g.stage + 1, nextAt: t + CONFIG.firstBallMs, bad: {} });
+    else writeGame({ ...g, phase: "break", endsAt: t + CONFIG.breakMs });
+    return;
+  }
+  // phase "play": latecomers early in the first prize still get a card
+  const late = humans().filter((id) => !g.in.includes(id));
+  if (late.length && g.stage === 0 && g.n < CONFIG.lateJoinBalls) g = writeGame({ ...g, in: [...g.in, ...late] });
+  if (t >= g.nextAt && g.n < 75) g = writeGame({ ...g, n: g.n + 1, calledAt: t, nextAt: t + callMs(g) });
+  else if (g.n >= 75 && t >= g.nextAt + CONFIG.giveUpMs) return void writeGame({ ...g, phase: "won", endsAt: t + 2500, wins: [...g.wins, { s: g.stage, i: "", n: "Nobody", c: "#888" }] });
+  botsTick(g, t);
+}
+
+/** Check a BINGO call: the daubed cells must really have been called and make this prize's pattern. */
+function claim(id, m) {
+  const g = game(), t = Date.now();
+  if (!g || g.phase !== "play" || !m || m.g !== g.id || m.s !== g.stage || !(isBot(id) ? g.bots.some((b) => b.i === id) : g.in.includes(id)) || (g.bad[id] || 0) > g.n) return;
+  const mask = ((m.m | 0) | FREE) & calledMask(cardFor(g.seed, id), calledSet(g));
+  if (complete(mask, g.stage)) writeGame({ ...g, phase: "won", endsAt: t + CONFIG.wonMs, wins: [...g.wins, { s: g.stage, i: id, n: nameOf(id).slice(0, 16), c: colorOf(id) }] });
+  else writeGame({ ...g, bad: { ...g.bad, [id]: g.n + CONFIG.falseWait } });
+}
+
+/** Bots daub each called number on their card after a planned, human-ish delay, then call BINGO. */
+function botsTick(g, t) {
+  const called = calledSet(g);
+  let changed = false;
+  const bots = g.bots.map((b) => {
+    let m = b.m;
+    cardFor(g.seed, b.i).forEach((num, i) => {
+      if (!num || (m >> i) & 1 || !called.has(num)) return;
+      const key = b.i + ":" + num;
+      if (!host.plan.has(key)) host.plan.set(key, t + rand(CONFIG.botDaubMin, CONFIG.botDaubMax) * (ATTRACT ? 0.5 : 1) + (Math.random() < CONFIG.botMissChance ? CONFIG.botMissMs * rand(0.6, 1.4) : 0));
+      if (t >= host.plan.get(key)) m |= 1 << i;
+    });
+    if (m !== b.m) { changed = true; return { ...b, m }; }
+    return b;
+  });
+  if (changed) g = writeGame({ ...g, bots });
+  for (const b of g.bots) {
+    if (!complete(b.m, g.stage) || (g.bad[b.i] || 0) > g.n) continue;
+    const key = g.stage + ":" + b.i;
+    if (!host.claimAt.has(key)) host.claimAt.set(key, t + rand(CONFIG.botClaimMin, CONFIG.botClaimMax) * (ATTRACT ? 0.4 : 1));
+    if (t >= host.claimAt.get(key)) return claim(b.i, { g: g.id, s: g.stage, m: b.m });
+  }
+}
+const playAgain = (g) => { if (g.phase === "break") writeGame({ ...g, endsAt: Math.min(g.endsAt, Date.now() + 1500) }); };
+
+// ── MY CARD ─────────────────────────────────────────────────────────────────────────
+let myName = "", myColor = COLORS[0], myMask = FREE, myGame = -1;
+try { myName = localStorage.getItem("mpa-name") || ""; } catch {}
+if (!myName) myName = ["Lucky", "Jolly", "Sunny", "Cosy", "Happy", "Dandy"][Math.floor(Math.random() * 6)] + " " + ["Dabber", "Caller", "Bean", "Clover", "Pip", "Biscuit"][Math.floor(Math.random() * 6)];
+const nameOf = (id) => (id === net.sessionId ? myName : isBot(id) ? game()?.bots.find((b) => b.i === id)?.n || "Bot" : String(S.entities.players[id]?.n || "Player"));
+const colorOf = (id) => (id === net.sessionId ? myColor : isBot(id) ? game()?.bots.find((b) => b.i === id)?.c || "#ccc" : S.entities.players[id]?.c || "#ccc");
+const inGame = (g) => g && g.in.includes(net.sessionId);
+/** Everyone's daub mask for this game: mine, the bots', and each player's own `d` field. */
+function maskOf(g, id) {
+  if (id === net.sessionId) return myGame === g.id ? myMask : FREE;
+  if (isBot(id)) return g.bots.find((b) => b.i === id)?.m ?? FREE;
+  const d = parse(S.entities.players[id]?.d, null);
+  return d && d.g === g.id ? d.m | FREE : FREE;
+}
+function daub(i, cellEl) {
+  const g = game();
+  if (!g || !inGame(g) || g.phase === "break") return;
+  if (myGame !== g.id) { myGame = g.id; myMask = FREE; }
+  const num = cardFor(g.seed, net.sessionId)[i];
+  if (!num || (myMask >> i) & 1) return;
+  if (!calledSet(g).has(num)) { if (cellEl) { cellEl.classList.remove("nope"); void cellEl.offsetWidth; cellEl.classList.add("nope"); } sfx("buzz"); showHint(`${label(num)} hasn't been called yet.`); return; }
+  myMask |= 1 << i;
+  net.me.set("d", JSON.stringify({ g: g.id, m: myMask }));
+  sfx("dab");
+  if (cellEl) { const r = cellEl.getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2, myColor, 10, 160); }
+  renderCard(g);
+}
+let claimedAt = 0;
+function callBingo() {
+  const g = game();
+  unlockAudio();
+  if (!g || g.phase !== "play") return;
+  if (!inGame(g)) return showHint("You get a card at the next game.");
+  if ((g.bad[net.sessionId] || 0) > g.n) return showHint("Wait for the next ball before calling again.");
+  const m = { g: g.id, s: g.stage, m: myGame === g.id ? myMask : FREE };
+  claimedAt = performance.now();
+  if (isHost()) claim(net.sessionId, m); else net.send("bingo", m);
+  showHint("BINGO! The caller is checking your card…");
+}
+// ?attract: daub the card like a quick player and call BINGO when it's done.
+let autoAt = 0;
+function autopilot(g) {
+  if (!ATTRACT || !g || g.phase !== "play" || performance.now() < autoAt) return;
+  autoAt = performance.now() + CONFIG.autoDaubMs * rand(0.5, 1.3);
+  const card = cardFor(g.seed, net.sessionId), set = calledSet(g);
+  const i = card.findIndex((num, k) => num && set.has(num) && !((myGame === g.id ? myMask : FREE) >> k & 1));
+  if (i >= 0) daub(i, $("card").querySelectorAll(".cell")[i]);
+  else if (complete(myMask, g.stage)) callBingo();
+}
+
+// ── MACHINE ─────────────────────────────────────────────────────────────────────────
+const mach = document.getElementById("mach"), mx = mach.getContext("2d");
+const globeBalls = Array.from({ length: 22 }, (_, i) => ({ x: Math.random() - 0.5, y: Math.random() * 0.5, vx: rand(-1, 1), vy: rand(-1, 1), c: COL_COLORS[i % 5] }));
+const machine = { shown: -1, seed: null, popAt: -1e9, rail: [] };
+let machW = 0, machH = 0;
+function fitCanvases() {
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  machW = mach.clientWidth; machH = mach.clientHeight;
+  mach.width = machW * dpr; mach.height = machH * dpr; mx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  fx.width = innerWidth * dpr; fx.height = innerHeight * dpr; fxc.setTransform(dpr, 0, 0, dpr, 0, 0);
+  fitCard();
+}
+function drawBall(x, y, r, num, alpha = 1) {
+  const col = num ? COL_COLORS[colOf(num)] : "#ccc";
+  mx.save(); mx.globalAlpha = alpha;
+  const g = mx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+  g.addColorStop(0, "#fff"); g.addColorStop(0.25, col); g.addColorStop(1, shade(col, -0.35));
+  mx.fillStyle = g; mx.beginPath(); mx.arc(x, y, r, 0, 7); mx.fill();
+  if (num && r > 9) {
+    mx.fillStyle = "#fff"; mx.beginPath(); mx.arc(x, y, r * 0.62, 0, 7); mx.fill();
+    mx.fillStyle = "#2a1430"; mx.textAlign = "center"; mx.textBaseline = "middle";
+    mx.font = `900 ${Math.round(r * 0.26)}px system-ui, sans-serif`; mx.fillText(COLS[colOf(num)], x, y - r * 0.3);
+    mx.font = `900 ${Math.round(r * 0.52)}px system-ui, sans-serif`; mx.fillText(num, x, y + r * 0.1);
+  }
+  mx.restore();
+}
+function shade(hex, k) { const n = parseInt(hex.slice(1), 16), f = (v) => Math.max(0, Math.min(255, Math.round(v + (k < 0 ? v * k : (255 - v) * k)))); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; }
+const easeOutBack = (t) => 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2);
+function drawMachine(dt, g) {
+  const W = machW, H = machH; if (!W || !H) return;
+  mx.clearRect(0, 0, W, H);
+  const R = H * 0.44, cx = R + 6, cy = H * 0.5, bigR = H * 0.36, bx = cx + R + 16 + bigR, now = performance.now();
+  // the globe and its tumbling balls (pure decoration, each client its own)
+  const spin = g && g.phase === "play" ? 1 : 0.3;
+  mx.fillStyle = "#00000033"; mx.beginPath(); mx.ellipse(cx, cy + R + 1, R * 0.7, 5, 0, 0, 7); mx.fill();
+  mx.save(); mx.beginPath(); mx.arc(cx, cy, R, 0, 7); mx.clip();
+  mx.fillStyle = "#ffffff10"; mx.fillRect(cx - R, cy - R, R * 2, R * 2);
+  const br = R * 0.16;
+  for (const b of globeBalls) {
+    b.vy += (0.9 - (b.y > 0.2 ? 3.2 * spin * Math.random() : 0)) * dt; b.vx += (Math.random() - 0.5) * 3 * spin * dt;
+    b.x += b.vx * dt * 1.6; b.y += b.vy * dt * 1.6;
+    const d = Math.hypot(b.x, b.y), lim = 1 - br / R;
+    if (d > lim) { const nx = b.x / d, ny = b.y / d, vn = b.vx * nx + b.vy * ny; b.x = nx * lim; b.y = ny * lim; if (vn > 0) { b.vx -= 1.8 * vn * nx; b.vy -= 1.8 * vn * ny; } }
+    mx.fillStyle = b.c; mx.beginPath(); mx.arc(cx + b.x * R, cy + b.y * R, br, 0, 7); mx.fill();
+    mx.fillStyle = "#ffffff99"; mx.beginPath(); mx.arc(cx + b.x * R - br * 0.3, cy + b.y * R - br * 0.35, br * 0.3, 0, 7); mx.fill();
+  }
+  mx.restore();
+  const glass = mx.createRadialGradient(cx - R * 0.4, cy - R * 0.5, R * 0.1, cx, cy, R);
+  glass.addColorStop(0, "#ffffff55"); glass.addColorStop(0.5, "#ffffff10"); glass.addColorStop(1, "#ffffff30");
+  mx.fillStyle = glass; mx.beginPath(); mx.arc(cx, cy, R, 0, 7); mx.fill();
+  mx.strokeStyle = "#ffc94a"; mx.lineWidth = 3; mx.stroke();
+  if (!g) return;
+  // the newest ball pops out of the globe and grows into the big ball; older ones slide down the rail
+  const list = calledList(g);
+  if (machine.seed !== g.seed || list.length < machine.shown || list.length - machine.shown > 1) { machine.seed = g.seed; machine.shown = list.length; machine.popAt = -1e9; }
+  else if (list.length > machine.shown) { machine.shown = list.length; machine.popAt = now; onNewBall(list[list.length - 1]); }
+  const latest = list[list.length - 1], p = Math.min(1, (now - machine.popAt) / 650);
+  const railR = Math.min(H * 0.17, 22), gap = railR * 2 + 6, railX = bx + bigR + 14 + railR, count = Math.max(0, Math.min(5, Math.floor((W - railX + railR) / gap)));
+  for (let k = 0; k < count; k++) {
+    const num = list[list.length - 2 - k]; if (!num) break;
+    const slide = p < 1 ? (1 - easeOutBack(p)) * gap : 0;
+    drawBall(railX + k * gap - slide, cy + bigR - railR, railR, num, 1 - k * 0.14);
+  }
+  if (latest) {
+    if (p < 1) { const e = easeOutBack(p), sx = cx, sy = cy - R; drawBall(sx + (bx - sx) * e, sy + (cy - sy) * e - Math.sin(p * Math.PI) * H * 0.25, bigR * (0.35 + 0.65 * Math.min(1, e)), latest); }
+    else drawBall(bx, cy, bigR, latest);
+  } else {
+    mx.fillStyle = "#ffffff18"; mx.beginPath(); mx.arc(bx, cy, bigR, 0, 7); mx.fill();
+    mx.fillStyle = "#ffffff99"; mx.font = `700 ${Math.round(bigR * 0.3)}px system-ui`; mx.textAlign = "center"; mx.textBaseline = "middle"; mx.fillText("Ready…", bx, cy);
+  }
+  if (count > 0 || W > bx + bigR + 30) {
+    mx.fillStyle = "#ffffffaa"; mx.font = "700 12px system-ui"; mx.textAlign = "left"; mx.textBaseline = "top";
+    mx.fillText(list.length ? `Ball ${list.length} of 75` : "", bx + bigR + 14, Math.max(4, cy - bigR));
+  }
+}
+
+// ── SCREEN ──────────────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const fx = $("fx"), fxc = fx.getContext("2d");
+let hintText = "", hintUntil = 0;
+const showHint = (s, ms = 2600) => { hintText = s; hintUntil = performance.now() + ms; };
+// the card: 5 headers + 25 cells, built once; each render only changes text and classes
+const cardEl = $("card"), cellEls = [];
+COLS.split("").forEach((L, c) => { const h = document.createElement("div"); h.className = "hd"; h.textContent = L; h.style.background = COL_COLORS[c]; cardEl.appendChild(h); });
+for (let i = 0; i < 25; i++) {
+  const b = document.createElement("button"); b.className = "cell"; b.innerHTML = "<span></span><i class=dab></i>";
+  b.querySelector(".dab").style.setProperty("--r", Math.round(rand(-30, 30)) + "deg");
+  b.addEventListener("pointerdown", (e) => { e.preventDefault(); unlockAudio(); daub(i, b); });
+  cardEl.appendChild(b); cellEls.push(b);
+}
+const patEls = Array.from({ length: 25 }, () => { const i = document.createElement("i"); $("pat").appendChild(i); return i; });
+const calledEls = [];
+for (let c = 0; c < 5; c++) {
+  const l = document.createElement("i"); l.className = "l"; l.textContent = COLS[c]; l.style.color = COL_COLORS[c]; $("called").appendChild(l);
+  for (let k = 1; k <= 15; k++) { const e = document.createElement("i"); e.textContent = c * 15 + k; $("called").appendChild(e); calledEls[c * 15 + k] = e; }
+}
+/** Size the card to the space it has: square cells, as big as fit. */
+function fitCard() {
+  const w = $("cardWrap"), cw = w.clientWidth, ch = w.clientHeight;
+  const cell = Math.max(34, Math.min(92, Math.floor(Math.min((cw - 16 - 20) / 5, (ch - 16 - 26 - 25) / 5))));
+  cardEl.style.width = cell * 5 + 20 + 16 + "px";
+  cellEls.forEach((b, i) => { b.style.height = cell + "px"; b.firstChild.style.fontSize = Math.round(cell * (i === 12 ? 0.2 : 0.36)) + "px"; });
+}
+let cardKey = "";
+function renderCard(g) {
+  const mine = inGame(g), seed = mine ? g.seed : null, key = seed + ":" + net.sessionId;
+  const card = mine ? cardFor(g.seed, net.sessionId) : null, set = calledSet(g), mask = mine && myGame === g.id ? myMask : FREE;
+  if (key !== cardKey) { cardKey = key; cellEls.forEach((b, i) => { b.firstChild.textContent = !card ? "?" : card[i] ? card[i] : "FREE"; b.classList.toggle("free", i === 12); }); }
+  cardEl.classList.toggle("wait", !mine);
+  const prize = g.phase === "play" || g.phase === "won" ? PRIZES[g.stage].masks : [];
+  const need = prize.length === 1 ? prize[0] : 0; // highlight the cells a single-shape prize needs
+  cellEls.forEach((b, i) => {
+    b.classList.toggle("on", !!((mask >> i) & 1) && mine);
+    b.querySelector(".dab").style.background = myColor;
+    b.classList.toggle("want", mine && need && (need >> i) & 1 && !((mask >> i) & 1) && g.phase === "play" && need !== (1 << 25) - 1);
+  });
+  $("wait").hidden = mine;
+  $("wait").textContent = g.phase === "break" ? "Your card comes with the next game" : "You get a card at the next game. Watch the caller!";
+  const ready = mine && g.phase === "play" && complete(mask & calledMask(card, set), g.stage);
+  $("btn").classList.toggle("ready", ready);
+}
+/** Everyone with a card this game (and those waiting), with how close they are. */
+function roster(g) {
+  const out = [], live = new Set(livePlayers());
+  for (const id of live) { out.push({ id, n: nameOf(id), c: colorOf(id), me: id === net.sessionId, late: !g.in.includes(id) }); }
+  for (const b of g.bots) out.push({ id: b.i, n: b.n, c: b.c });
+  return out;
+}
+let wasBad = false, bannerUntil = 0, seenWins = -1, seenGame = -1, boardFor = -1, lastPat = 0;
+function render() {
+  const g = game();
+  if (!g) return;
+  const t = Date.now(), pnow = performance.now();
+  if (g.id !== seenGame) { seenGame = g.id; seenWins = g.wins.length; if (myGame !== g.id) { myGame = g.id; myMask = FREE; } $("over").hidden = true; }
+  if (g.wins.length > seenWins) { seenWins = g.wins.length; onWin(g, g.wins[g.wins.length - 1]); }
+  // the stage line + pattern picture (a line prize cycles through its lines)
+  const stage = PRIZES[g.stage];
+  $("stageName").textContent = g.phase === "break" ? "Break" : stage.name;
+  $("stageHint").textContent = g.phase === "break" ? `next game in ${Math.max(0, Math.ceil((g.endsAt - t) / 1000))}s` : `· ${stage.hint} · prize ${g.stage + 1} of ${PRIZES.length}`;
+  const pm = stage.masks[Math.floor(pnow / 700) % stage.masks.length];
+  patEls.forEach((e, i) => e.classList.toggle("on", !!((pm >> i) & 1)));
+  renderCard(g);
+  // the called board
+  const list = calledList(g), set = new Set(list), last = list[list.length - 1];
+  for (let n = 1; n <= 75; n++) { const e = calledEls[n], on = set.has(n); if (e.on !== on) { e.on = on; e.classList.toggle("on", on); e.style.background = on ? COL_COLORS[colOf(n)] : ""; } e.classList.toggle("last", n === last); }
+  // players: "2 to go", prizes won this game
+  const won = {}; g.wins.forEach((w) => { won[w.i] = (won[w.i] || 0) + 1; });
+  $("players").innerHTML = roster(g).map((p) => {
+    const left = p.late ? -1 : toGo(maskOf(g, p.id) & calledMask(cardFor(g.seed, p.id), set), g.stage);
+    const tag = p.late ? "next game" : g.phase === "break" ? "" : left === 0 ? "BINGO?" : `${left} to go`;
+    return `<div class="p ${p.me ? "me" : ""} ${p.late ? "late" : ""}"><span class="av" style="background:${esc(p.c)}">${esc(p.n[0] || "?")}</span>${esc(p.me ? p.n + " (you)" : p.n)}${won[p.id] ? " " + "🏆".repeat(won[p.id]) : ""} <em class="${left >= 0 && left <= 1 && g.phase === "play" ? "hot" : ""}">${tag}</em></div>`;
+  }).join("");
+  // banner (BINGO!) and the results card in the break
+  $("banner").hidden = pnow > bannerUntil || g.phase === "break";
+  $("over").hidden = g.phase !== "break" || t - (g.endsAt - CONFIG.breakMs) < 600;
+  if (g.phase === "break") results(g, t);
+  // hint line (a wrong BINGO call buzzes once)
+  const bad = (g.bad[net.sessionId] || 0) > g.n;
+  if (bad && !wasBad) { sfx("buzz"); hintUntil = 0; }
+  wasBad = bad;
+  $("hint").textContent = ATTRACT ? "" : pnow < hintUntil ? hintText : bad ? "Not a bingo yet! You sit out the next couple of balls." :
+    pnow - startedAt < 20000 && inGame(g) ? "Tap called numbers to daub them. Pattern done? Hit BINGO!" : "";
+  const n = livePlayers().length;
+  $("net").textContent = ATTRACT ? "" : net.offline ? "Offline: playing with bots" : dropped ? "Reconnecting…" : `Online · ${n} player${n === 1 ? "" : "s"}${isHost() ? " · you run the caller" : ""}`;
+}
+function onWin(g, w) {
+  const mine = w.i === net.sessionId;
+  $("banner").firstElementChild.innerHTML = w.i ? `BINGO!<small>${esc(mine ? "You win" : w.n + " wins")} ${esc(PRIZES[w.s].name.toLowerCase())}!</small>` : `No bingo<small>Nobody claimed ${esc(PRIZES[w.s].name.toLowerCase())}</small>`;
+  bannerUntil = performance.now() + Math.min(CONFIG.wonMs, 3500);
+  if (w.i) { confetti(mine ? 140 : 70); sfx(mine ? "win" : "bingo"); }
+  if (w.i && !isBot(w.i)) say(`Bingo! ${w.n} wins ${PRIZES[w.s].name}`);
+  if (mine && board) board.submit(1, "inc").catch(() => null);
+}
+function results(g, t) {
+  const mine = g.wins.filter((w) => w.i === net.sessionId).length;
+  $("title").textContent = mine ? `You won ${mine === 1 ? "a prize" : mine + " prizes"}! 🏆` : `Game ${g.id} is over`;
+  $("results").innerHTML = PRIZES.map((p, s) => { const w = g.wins.find((x) => x.s === s); return `<li class="${w && w.i === net.sessionId ? "me" : ""}">${esc(p.name)}<span>${w ? esc(w.i === net.sessionId ? "You" : w.n) : "—"}</span></li>`; }).join("");
+  $("next").textContent = `Next game in ${Math.max(0, Math.ceil((g.endsAt - t) / 1000))}s · new cards for everyone`;
+  if (boardFor !== g.id) { boardFor = g.id; showBoard(); }
+}
+let board = null;
+function showBoard() {
+  const list = $("board");
+  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
+  list.innerHTML = "<li>Loading…</li>";
+  board.top(10).then(({ entries }) => {
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score} 🏆</span></li>`).join("") : "<li>No bingos yet. Be the first.</li>";
+  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+}
+$("again").onclick = () => { const g = game(); if (!g || g.phase !== "break") return; if (isHost()) playAgain(g); else net.send("again", {}); $("over").hidden = true; };
+$("btn").addEventListener("pointerdown", (e) => { e.preventDefault(); callBingo(); });
+addEventListener("keydown", (e) => { if ((e.key === " " || e.key === "Enter" || e.key.toLowerCase() === "b") && document.activeElement !== $("name")) { e.preventDefault(); callBingo(); } });
+
+// particles on the overlay canvas: daub splats and confetti
+const parts = [];
+function burst(x, y, color, n, speed) { for (let i = 0; i < n; i++) { const a = Math.random() * 7, s = speed * rand(0.3, 1); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.6), c: color, w: rand(3, 6), g: 200 }); } }
+function confetti(n) { for (let i = 0; i < n; i++) parts.push({ x: rand(0, innerWidth), y: rand(-80, -10), vx: rand(-60, 60), vy: rand(80, 260), life: rand(2, 3.5), c: COLORS[i % COLORS.length], w: rand(6, 10), g: 60, spin: rand(0, 6) }); }
+function drawFx(dt) {
+  fxc.clearRect(0, 0, innerWidth, innerHeight);
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i]; p.life -= dt; if (p.life <= 0) { parts.splice(i, 1); continue; }
+    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.spin = (p.spin || 0) + dt * 8;
+    fxc.globalAlpha = Math.min(1, p.life * 2); fxc.fillStyle = p.c;
+    fxc.save(); fxc.translate(p.x, p.y); fxc.rotate(p.spin); fxc.fillRect(-p.w / 2, -p.w / 4, p.w, p.w / 2); fxc.restore();
+  }
+  fxc.globalAlpha = 1;
+}
+
+// ── SOUND & VOICE ───────────────────────────────────────────────────────────────────
+let audio = null, voiceOn = false;
+try { voiceOn = localStorage.getItem("bingo-voice") === "1"; } catch {}
+function unlockAudio() { if (audio || ATTRACT) return; try { audio = new AudioContext(); } catch {} }
+function sfx(kind) {
+  if (!audio) return;
+  const t = audio.currentTime, o = audio.createOscillator(), gain = audio.createGain();
+  const [type, f0, f1, len, vol] = { pop: ["triangle", 300, 900, 0.12, 0.18], dab: ["sine", 220, 110, 0.12, 0.3], buzz: ["square", 140, 110, 0.18, 0.06], bingo: ["triangle", 520, 880, 0.35, 0.18], win: ["triangle", 520, 1320, 0.6, 0.22] }[kind];
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + len);
+  gain.gain.setValueAtTime(vol, t); gain.gain.exponentialRampToValueAtTime(0.001, t + len);
+  o.connect(gain).connect(audio.destination); o.start(t); o.stop(t + len + 0.02);
+}
+/** The caller's voice, if it's switched on (🔈 button) and the browser can speak. */
+function say(text) {
+  if (!voiceOn || ATTRACT || !("speechSynthesis" in window)) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 0.95; u.pitch = 0.9; speechSynthesis.speak(u); } catch {}
+}
+function onNewBall(num) { sfx("pop"); say(`${COLS[colOf(num)]}. ${num}`); }
+function paintVoice() { $("voice").textContent = voiceOn ? "🔊" : "🔈"; $("voice").classList.toggle("on", voiceOn); }
+$("voice").onclick = () => { unlockAudio(); voiceOn = !voiceOn; try { localStorage.setItem("bingo-voice", voiceOn ? "1" : "0"); } catch {} paintVoice(); if (voiceOn) say("Eyes down!"); };
+paintVoice();
+
+// ── MAIN LOOP ───────────────────────────────────────────────────────────────────────
+/** Two people joined at once in one color: the one with the higher sessionId picks a free one. Bots' colors count as taken. */
+function fixColor() {
+  const others = Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId), botColors = (game()?.bots || []).map((b) => b.c);
+  if (!others.some(([id, p]) => p.c === myColor && id < net.sessionId) && !botColors.includes(myColor)) return;
+  const taken = new Set([...others.map(([, p]) => p.c), ...botColors]), free = COLORS.find((c) => !taken.has(c));
+  if (free) { myColor = free; net.me.set("c", free); }
+}
+$("name").value = myName;
+$("name").addEventListener("change", () => {
+  myName = $("name").value.trim().slice(0, 16) || myName;
+  try { localStorage.setItem("mpa-name", myName); } catch {}
+  net && net.me.set("n", myName);
+});
+if (ATTRACT) { $("name").style.display = $("voice").style.display = "none"; Object.assign(CONFIG, { seats: 9, callMs: 850, fastCallMs: 700, firstBallMs: 500, wonMs: 2600, breakMs: 2500 }); }
+addEventListener("resize", fitCanvases); addEventListener("orientationchange", fitCanvases);
+if (window.ResizeObserver) new ResizeObserver(fitCard).observe($("cardWrap"));
+let last = performance.now(), lastHb = 0, lastTick = 0;
+const startedAt = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const t0 = performance.now(); // not `now`: the first frame after a freeze can be stamped from before it ended
+  if (host.frameAt && t0 - host.frameAt > 1000) { host.wokeAt = t0; host.last = null; host.planGame = -1; } // woke from a stall: forget my host copy (see isHost)
+  host.frameAt = t0;
+  const dt = Math.max(0, Math.min(0.05, (t0 - last) / 1000)); last = t0;
+  if (t0 - lastHb > 1000) { lastHb = t0; net.me.set("hb", Date.now()); fixColor(); }
+  const g = game();
+  drawMachine(dt, g);
+  drawFx(dt);
+  if (t0 - lastTick > 100) { // rules and the page update 10 times a second
+    lastTick = t0;
+    if (isHost()) hostTick();
+    autopilot(game());
+    render();
+  }
+}
+
+(async function start() {
+  net = await connect();
+  net.onState((st) => { S = st; });
+  net.on("bingo", (m, from) => { if (isHost() && m && typeof m === "object") claim(from, m); });
+  net.on("again", () => { const g = game(); if (isHost() && g) playAgain(g); });
+  net.onDisconnect(() => { dropped = true; $("net").textContent = "Reconnecting…"; });
+  net.onReconnect(() => { dropped = false; });
+  if (!net.offline && typeof MP !== "undefined") board = MP.auth({ key: MP_CONNECT.key, apiUrl: MP_CONNECT.apiUrl }).leaderboard(CONFIG.board);
+  const taken = new Set([...Object.entries(S.entities.players || {}).filter(([id]) => id !== net.sessionId).map(([, p]) => p.c), ...(game()?.bots || []).map((b) => b.c)]);
+  myColor = COLORS.find((c) => !taken.has(c)) || COLORS[Math.floor(Math.random() * COLORS.length)];
+  net.me.set({ n: myName, c: myColor, hb: Date.now() });
+  fitCanvases();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
