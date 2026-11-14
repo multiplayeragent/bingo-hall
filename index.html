@@ -81,6 +81,7 @@
   .card2 ol, .card2 ul { margin: 0; padding-left: 24px; font-size: 14px; }
   .card2 ul { list-style: none; padding: 0; }
   .card2 li span { float: right; font-variant-numeric: tabular-nums; }
+  .card2 li.note { list-style: none; margin-left: -24px; opacity: .8; } /* a message in place of a list: no "1." in front of it */
   .card2 li.me { color: var(--gold); font-weight: 700; }
   .card2 p { margin: 12px 0; font-size: 13px; opacity: .85; text-align: center; }
   button.go { width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--gold); color: #3a1a2a; font: 800 17px system-ui, sans-serif; cursor: pointer; }
@@ -107,7 +108,7 @@
 <div id="banner" hidden><div></div></div>
 <div id="over" hidden><div class="card2">
   <h2 id="title">Game over</h2><ul id="results"></ul>
-  <h3>Most bingos</h3><ol id="board"><li>Loading…</li></ol>
+  <h3>Most bingos</h3><ol id="board"><li class="note">Loading…</li></ol>
   <p id="next"></p>
   <button class="go" id="again">Play again</button>
 </div></div>
@@ -141,7 +142,8 @@
  *     "again" (start the next game sooner). The host checks the daubed cells were really
  *     called and make the pattern; a wrong call sits out the next few balls.
  *   - Bots live inside `game.bots` (name, color, daub mask). The host daubs for them with a
- *     human-like delay and has them call BINGO a second or three after they finish.
+ *     human-like delay and has them call BINGO a second or three after they finish (and,
+ *     now and then, one number too soon: they sit out like anyone else).
  *   - Players who arrive mid-game get a card at the next game (or this one, if it just began).
  *   - ?attract plays offline with bots only (the preview video is recorded from it).
  *   - Leaderboard "bingo-wins": prizes won (submitted with "inc"), on the results card.
@@ -162,6 +164,7 @@ const CONFIG = {
   botMissChance: 0.08,    // sometimes a bot doesn't notice a number...
   botMissMs: 9000,        // ...for about this long
   botClaimMin: 1300, botClaimMax: 4200, // ms a bot takes to notice its own bingo
+  botFalseCall: 0.03,     // chance per ball that a bot one number short shouts BINGO too soon (and sits out)
   autoDaubMs: 700,        // ?attract: how fast the autopilot daubs your card
   board: "bingo-wins",
 };
@@ -343,7 +346,10 @@ function botsTick(g, t) {
   });
   if (changed) g = writeGame({ ...g, bots });
   for (const b of g.bots) {
-    if (!complete(b.m, g.stage) || (g.bad[b.i] || 0) > g.n) continue;
+    if ((g.bad[b.i] || 0) > g.n) continue;
+    const early = "early:" + g.stage + ":" + b.i + ":" + g.n; // one roll per ball: a bot one short gets excited now and then
+    if (!complete(b.m, g.stage) && toGo(b.m, g.stage) === 1 && !host.claimAt.has(early)) { host.claimAt.set(early, 0); if (Math.random() < CONFIG.botFalseCall) return claim(b.i, { g: g.id, s: g.stage, m: b.m }); }
+    if (!complete(b.m, g.stage)) continue;
     const key = g.stage + ":" + b.i;
     if (!host.claimAt.has(key)) host.claimAt.set(key, t + rand(CONFIG.botClaimMin, CONFIG.botClaimMax) * (ATTRACT ? 0.4 : 1));
     if (t >= host.claimAt.get(key)) return claim(b.i, { g: g.id, s: g.stage, m: b.m });
@@ -465,7 +471,7 @@ function drawMachine(dt, g) {
     drawBall(railX + k * gap - slide, cy + bigR - railR, railR, num, 1 - k * 0.14);
   }
   if (latest) {
-    if (p < 1) { const e = easeOutBack(p), sx = cx, sy = cy - R; drawBall(sx + (bx - sx) * e, sy + (cy - sy) * e - Math.sin(p * Math.PI) * H * 0.25, bigR * (0.35 + 0.65 * Math.min(1, e)), latest); }
+    if (p < 1) { const e = easeOutBack(p), sx = cx, sy = cy - R, r = bigR * (0.35 + 0.65 * Math.min(1, e)); drawBall(sx + (bx - sx) * e, Math.max(r + 2, sy + (cy - sy) * e - Math.sin(p * Math.PI) * H * 0.25), r, latest); } // its arc stays inside the machine's box
     else drawBall(bx, cy, bigR, latest);
   } else {
     mx.fillStyle = "#ffffff18"; mx.beginPath(); mx.arc(bx, cy, bigR, 0, 7); mx.fill();
@@ -551,7 +557,7 @@ function render() {
   const won = {}; g.wins.forEach((w) => { won[w.i] = (won[w.i] || 0) + 1; });
   $("players").innerHTML = roster(g).map((p) => {
     const left = p.late ? -1 : toGo(maskOf(g, p.id) & calledMask(cardFor(g.seed, p.id), set), g.stage);
-    const tag = p.late ? "next game" : g.phase === "break" ? "" : left === 0 ? "BINGO?" : `${left} to go`;
+    const tag = p.late ? "next game" : g.phase === "break" ? "" : (g.bad[p.id] || 0) > g.n ? "false call!" : left === 0 ? "BINGO?" : `${left} to go`;
     return `<div class="p ${p.me ? "me" : ""} ${p.late ? "late" : ""}"><span class="av" style="background:${esc(p.c)}">${esc(p.n[0] || "?")}</span>${esc(p.me ? p.n + " (you)" : p.n)}${won[p.id] ? " " + "🏆".repeat(won[p.id]) : ""} <em class="${left >= 0 && left <= 1 && g.phase === "play" ? "hot" : ""}">${tag}</em></div>`;
   }).join("");
   // banner (BINGO!) and the results card in the break
@@ -585,15 +591,19 @@ function results(g, t) {
 let board = null;
 function showBoard() {
   const list = $("board");
-  if (!board) { list.innerHTML = "<li>Leaderboards need a connection.</li>"; return; }
-  list.innerHTML = "<li>Loading…</li>";
+  if (!board) { list.innerHTML = `<li class="note">Leaderboards need a connection.</li>`; return; }
+  list.innerHTML = `<li class="note">Loading…</li>`;
   board.top(10).then(({ entries }) => {
-    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score} 🏆</span></li>`).join("") : "<li>No bingos yet. Be the first.</li>";
-  }).catch(() => { list.innerHTML = "<li>Couldn't load the leaderboard.</li>"; });
+    list.innerHTML = entries.length ? entries.map((e) => `<li>${esc(e.username || "Player")}<span>${e.score} 🏆</span></li>`).join("") : `<li class="note">No bingos yet. Be the first.</li>`;
+  }).catch(() => { list.innerHTML = `<li class="note">Couldn't load the leaderboard.</li>`; });
 }
 $("again").onclick = () => { const g = game(); if (!g || g.phase !== "break") return; if (isHost()) playAgain(g); else net.send("again", {}); $("over").hidden = true; };
 $("btn").addEventListener("pointerdown", (e) => { e.preventDefault(); callBingo(); });
-addEventListener("keydown", (e) => { if ((e.key === " " || e.key === "Enter" || e.key.toLowerCase() === "b") && document.activeElement !== $("name")) { e.preventDefault(); callBingo(); } });
+addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase(), el = document.activeElement;
+  if (el === $("name") || (k !== "b" && el && el.tagName === "BUTTON")) return; // Enter / Space on a focused button (Play again, the voice) press that button
+  if (k === " " || k === "enter" || k === "b") { e.preventDefault(); callBingo(); }
+});
 
 // particles on the overlay canvas: daub splats and confetti
 const parts = [];
@@ -646,7 +656,7 @@ $("name").addEventListener("change", () => {
   try { localStorage.setItem("mpa-name", myName); } catch {}
   net && net.me.set("n", myName);
 });
-if (ATTRACT) { $("name").style.display = $("voice").style.display = "none"; Object.assign(CONFIG, { seats: 9, callMs: 850, fastCallMs: 700, firstBallMs: 500, wonMs: 2600, breakMs: 2500 }); }
+if (ATTRACT) { $("name").style.display = $("voice").style.display = "none"; Object.assign(CONFIG, { seats: 9, callMs: 850, fastCallMs: 700, firstBallMs: 500, wonMs: 2600, breakMs: 2500, botFalseCall: 0.008 }); }
 addEventListener("resize", fitCanvases); addEventListener("orientationchange", fitCanvases);
 if (window.ResizeObserver) new ResizeObserver(fitCard).observe($("cardWrap"));
 let last = performance.now(), lastHb = 0, lastTick = 0;
