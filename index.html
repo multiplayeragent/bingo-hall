@@ -326,7 +326,7 @@ function claim(id, m) {
   if (!g || g.phase !== "play" || !m || m.g !== g.id || m.s !== g.stage || !(isBot(id) ? g.bots.some((b) => b.i === id) : g.in.includes(id)) || (g.bad[id] || 0) > g.n) return;
   const mask = ((m.m | 0) | FREE) & calledMask(cardFor(g.seed, id), calledSet(g));
   if (complete(mask, g.stage)) writeGame({ ...g, phase: "won", endsAt: t + CONFIG.wonMs, wins: [...g.wins, { s: g.stage, i: id, n: nameOf(id).slice(0, 16), c: colorOf(id) }] });
-  else writeGame({ ...g, bad: { ...g.bad, [id]: g.n + CONFIG.falseWait } });
+  else writeGame({ ...g, bad: { ...g.bad, [id]: Math.min(75, g.n + CONFIG.falseWait) } }); // once all 75 are out there is no "next ball" to wait for: no sitting out
 }
 
 /** Bots daub each called number on their card after a planned, human-ish delay, then call BINGO. */
